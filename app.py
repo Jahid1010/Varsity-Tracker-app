@@ -7,15 +7,14 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # -------------------- CONFIG --------------------
-# Google Sheet URL
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1oX51S8gpH1v-2q_P7DGCezOnXR5tFdJbq8snzr9-9wk/edit#gid=0"
 PASSWORD = "Jahid1803105#"
 
 # -------------------- GSPREAD AUTH --------------------
-creds = Credentials.from_service_account_info(st.secrets["google_service_account"])
+creds = Credentials.from_service_account_info(
+    st.secrets["google_service_account"]
+)
 gc = gspread.authorize(creds)
-
-# Open sheet & worksheet
 sh = gc.open_by_url(SHEET_URL)
 worksheet = sh.sheet1
 
@@ -23,6 +22,14 @@ worksheet = sh.sheet1
 def load_data():
     records = worksheet.get_all_records()
     df = pd.DataFrame(records)
+    if df.empty:
+        df = pd.DataFrame(columns=[
+            "Varsity Name", "Subject", "Address", "DAAD Link",
+            "Portal Link", "Requriment", "application_through",
+            "Summer Start", "Summer Deadline",
+            "Winter Start", "Winter Deadline",
+            "Deadline", "Done"
+        ])
     if "Done" not in df.columns:
         df["Done"] = False
     return df
