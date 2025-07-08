@@ -2,31 +2,38 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date
 import numpy as np
+
 import gspread
-from gspread_dataframe import get_as_dataframe, set_with_dataframe
+from google.oauth2.service_account import Credentials
 
-# ----------------- CONFIG -----------------
+# -------------------- CONFIG --------------------
+# Google Sheet URL
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1oX51S8gpH1v-2q_P7DGCezOnXR5tFdJbq8snzr9-9wk/edit#gid=0"
 PASSWORD = "Jahid1803105#"
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1oX51S8gpH1v-2q_P7DGCezOnXR5tFdJbq8snzr9-9wk/edit#gid=0"
 
-# ----------------- AUTH -----------------
-gc = gspread.service_account(filename="service_account.json")
-sh = gc.open_by_url(GOOGLE_SHEET_URL)
+# -------------------- GSPREAD AUTH --------------------
+creds = Credentials.from_service_account_info(st.secrets["google_service_account"])
+gc = gspread.authorize(creds)
+
+# Open sheet & worksheet
+sh = gc.open_by_url(SHEET_URL)
 worksheet = sh.sheet1
 
-# ----------------- LOAD & SAVE -----------------
+# -------------------- LOAD / SAVE --------------------
 def load_data():
-    df = get_as_dataframe(worksheet, evaluate_formulas=True)
-    df = df.dropna(how="all")
+    records = worksheet.get_all_records()
+    df = pd.DataFrame(records)
     if "Done" not in df.columns:
         df["Done"] = False
     return df
 
 def save_data(df):
     worksheet.clear()
-    set_with_dataframe(worksheet, df)
+    worksheet.update([df.columns.values.tolist()] + df.values.tolist())
 
 data = load_data()
+
+# -------------------- PAGE SETUP --------------------
 st.set_page_config(page_title="Varsity Tracker", layout="wide")
 
 if "page" not in st.session_state:
@@ -38,7 +45,7 @@ if st.sidebar.button("Entry"):
 if st.sidebar.button("List"):
     st.session_state.page = "List"
 
-# ----------------- ENTRY PAGE -----------------
+# -------------------- ENTRY PAGE --------------------
 if st.session_state.page == "Entry":
     st.title("🎓 University Entry")
 
@@ -93,9 +100,22 @@ if st.session_state.page == "Entry":
     address = st.text_input("Address")
 
     if st.button("Submit"):
-        if ((data["Varsity Name"] == varsity_name) & (data["Subject"] == subject)).any():
+        if not varsity_name or not subject:
+            st.warning("Varsity Name and Subject are required!")
+        elif ((data["Varsity Name"] == varsity_name) & (data["Subject"] == subject)).any():
             st.warning("This varsity and subject already exist.")
         else:
+            deadlines = []
+            if summer_deadline:
+                deadlines.append(datetime.strptime(summer_deadline, "%m-%d"))
+            if winter_deadline:
+                deadlines.append(datetime.strptime(winter_deadline, "%m-%d"))
+
+            if deadlines:
+                earliest_deadline = min(deadlines).strftime("%m-%d")
+            else:
+                earliest_deadline = ""
+
             new_row = pd.DataFrame([{
                 "Varsity Name": varsity_name,
                 "Subject": subject,
@@ -108,13 +128,15 @@ if st.session_state.page == "Entry":
                 "Summer Deadline": summer_deadline,
                 "Winter Start": winter_start,
                 "Winter Deadline": winter_deadline,
+                "Deadline": earliest_deadline,
                 "Done": False
             }])
             data = pd.concat([data, new_row], ignore_index=True)
             save_data(data)
             st.success("Entry saved successfully!")
+            st.rerun()
 
-# ----------------- LIST PAGE -----------------
+# -------------------- LIST PAGE --------------------
 elif st.session_state.page == "List":
     st.title("📋 University List")
 
@@ -174,7 +196,6 @@ elif st.session_state.page == "List":
         st.subheader("📚 Current Applications")
         st.dataframe(styled_df, use_container_width=True)
 
-        # --- Mark as Done ---
         st.subheader("✅ Mark as Done")
         for idx, row in data_active.iterrows():
             if st.checkbox(f"{row['Varsity Name']} — {row['Subject']}", key=f"done_{idx}"):
@@ -185,7 +206,6 @@ elif st.session_state.page == "List":
             st.success("Updated! Checked entries are now marked done and hidden.")
             st.rerun()
 
-        # --- Clear ---
         st.markdown("---")
         st.subheader("🧹 Clear All Data")
         with st.form("clear_form"):
