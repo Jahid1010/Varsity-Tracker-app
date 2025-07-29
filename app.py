@@ -11,8 +11,14 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/1oX51S8gpH1v-2q_P7DGCezOnXR5
 PASSWORD = "Jahid1803105#"
 
 # -------------------- GSPREAD AUTH --------------------
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
 creds = Credentials.from_service_account_info(
-    st.secrets["google_service_account"]
+    st.secrets["google_service_account"],
+    scopes=SCOPES
 )
 gc = gspread.authorize(creds)
 sh = gc.open_by_url(SHEET_URL)
